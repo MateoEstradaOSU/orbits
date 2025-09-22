@@ -32,9 +32,20 @@ const marsMaterial = new THREE.MeshLambertMaterial({
 const marsMesh = new THREE.Mesh(marsGeometry, marsMaterial);
 const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
 
-// Scale the meshes for better visualization
-sunMesh.scale.set(2, 2, 2);  // Make sun bigger
-marsMesh.scale.set(0.8, 0.8, 0.8);  // Make mars smaller
+// Scale the meshes to realistic proportions
+// Sun radius: 6.96e8 meters, Mars radius: 3.39e6 meters
+// Ratio: Sun is ~205 times larger than Mars
+// For visualization, we'll scale down but maintain the ratio
+const sunRadius = 6.96e8;
+const marsRadius = 3.39e6;
+const sizeRatio = sunRadius / marsRadius; // ~205
+
+// Scale Mars to a reasonable size, then scale Sun proportionally
+const marsScale = 0.1; // Small Mars for better orbit visualization
+const sunScale = marsScale * sizeRatio * 0.01; // Scale down the ratio for better viewing
+
+sunMesh.scale.set(sunScale, sunScale, sunScale);  // Realistic Sun size
+marsMesh.scale.set(marsScale, marsScale, marsScale);  // Small Mars
 
 scene.add(sunMesh);
 scene.add(marsMesh);
