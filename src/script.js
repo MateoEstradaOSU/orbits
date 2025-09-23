@@ -11,6 +11,7 @@ import {
 // Textures
 import marsTexture from "../img/mars_1k_color.jpg";
 import sunTexture from "../img/sunmap.jpg";
+// Note: Using procedural material for Earth since we don't have an Earth texture
 // Canvas
 const canvas = document.querySelector("canvas.webgl");
 
@@ -22,6 +23,7 @@ const scene = new THREE.Scene();
  */
 const textureLoader = new THREE.TextureLoader();
 const marsGeometry = new THREE.SphereGeometry(0.5, 64, 64);
+const earthGeometry = new THREE.SphereGeometry(0.5, 64, 64);
 const sunGeometry = new THREE.SphereGeometry(0.5, 64, 64);
 const sunMaterial = new THREE.MeshBasicMaterial({
   map: textureLoader.load(sunTexture),
@@ -29,7 +31,11 @@ const sunMaterial = new THREE.MeshBasicMaterial({
 const marsMaterial = new THREE.MeshLambertMaterial({
   map: textureLoader.load(marsTexture),
 });
+const earthMaterial = new THREE.MeshLambertMaterial({
+  color: 0x4169E1, // Royal blue color for Earth
+});
 const marsMesh = new THREE.Mesh(marsGeometry, marsMaterial);
+const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
 const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
 
 // Scale the meshes to realistic proportions
@@ -40,18 +46,28 @@ const sunRadius = 6.96e8;
 const marsRadius = 3.39e6;
 const sizeRatio = sunRadius / marsRadius; // ~205
 
-// Scale Mars to a reasonable size, then scale Sun proportionally
+// Calculate Earth scale too (Earth radius: 6.371e6 meters)
+const earthRadius = 6.371e6;
+const earthToMarsRatio = earthRadius / marsRadius; // ~1.88 (Earth is bigger than Mars)
+
+// Scale planets to reasonable sizes, then scale Sun proportionally
 const marsScale = 0.1; // Small Mars for better orbit visualization
+const earthScale = marsScale * earthToMarsRatio; // Earth proportionally bigger than Mars
 const sunScale = marsScale * sizeRatio * 0.01; // Scale down the ratio for better viewing
 
 sunMesh.scale.set(sunScale, sunScale, sunScale);  // Realistic Sun size
+earthMesh.scale.set(earthScale, earthScale, earthScale);  // Earth bigger than Mars
 marsMesh.scale.set(marsScale, marsScale, marsScale);  // Small Mars
 
 scene.add(sunMesh);
+scene.add(earthMesh);
 scene.add(marsMesh);
 
 // Create physics simulation
 const sun = CelestialBodyPresets.createSun();
+
+// Create Earth using the preset (which has the right orbital parameters)
+const earth = CelestialBodyPresets.createEarth();
 
 // Create Mars manually since it's not in the 2D presets
 const mars = createCelestialBody({
@@ -65,28 +81,42 @@ const mars = createCelestialBody({
 });
 
 // Set up the simulation with the celestial bodies
-const simulation = new PhysicsSimulation([sun, mars]);
+const simulation = new PhysicsSimulation([sun, earth, mars]);
 simulation.dt = 86400 * 10; // 10 days per step for faster orbit
 
 // Scale factor for converting physics units to Three.js units
 const SCALE_FACTOR = 1 / 1e11; // Convert meters to scene units
 
-// Create orbital trail for Mars
-const trailGeometry = new THREE.BufferGeometry();
-const trailMaterial = new THREE.LineBasicMaterial({ color: 0xff4500, opacity: 0.6, transparent: true });
-const trailPositions = [];
+// Create orbital trails for both planets
+// Mars trail
+const marsTrailGeometry = new THREE.BufferGeometry();
+const marsTrailMaterial = new THREE.LineBasicMaterial({ color: 0xff4500, opacity: 0.6, transparent: true });
+const marsTrailPositions = [];
 const MAX_TRAIL_POINTS = 200;
 
-// Initialize trail positions
+// Earth trail  
+const earthTrailGeometry = new THREE.BufferGeometry();
+const earthTrailMaterial = new THREE.LineBasicMaterial({ color: 0x4169E1, opacity: 0.6, transparent: true });
+const earthTrailPositions = [];
+
+// Initialize trail positions for both planets
 for (let i = 0; i < MAX_TRAIL_POINTS; i++) {
-  trailPositions.push(0, 0, 0);
+  marsTrailPositions.push(0, 0, 0);
+  earthTrailPositions.push(0, 0, 0);
 }
-trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(trailPositions, 3));
-const trailLine = new THREE.Line(trailGeometry, trailMaterial);
-scene.add(trailLine);
+
+marsTrailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(marsTrailPositions, 3));
+earthTrailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(earthTrailPositions, 3));
+
+const marsTrailLine = new THREE.Line(marsTrailGeometry, marsTrailMaterial);
+const earthTrailLine = new THREE.Line(earthTrailGeometry, earthTrailMaterial);
+
+scene.add(marsTrailLine);
+scene.add(earthTrailLine);
 
 // Trail tracking variables
-let trailIndex = 0;
+let marsTrailIndex = 0;
+let earthTrailIndex = 0;
 const trailUpdateCounter = { count: 0 };
 
 // Add some ambient lighting
@@ -193,28 +223,42 @@ const tick = () => {
     0
   );
 
+  // Earth position
+  const earthX = earth.position.x * SCALE_FACTOR;
+  const earthY = earth.position.y * SCALE_FACTOR;
+  earthMesh.position.set(earthX, earthY, 0);
+
   // Mars position
   const marsX = mars.position.x * SCALE_FACTOR;
   const marsY = mars.position.y * SCALE_FACTOR;
   marsMesh.position.set(marsX, marsY, 0);
 
-  // Update orbital trail every few frames
+  // Update orbital trails every few frames
   trailUpdateCounter.count++;
   if (trailUpdateCounter.count % 5 === 0) {
-    const positions = trailLine.geometry.attributes.position.array;
-    positions[trailIndex * 3] = marsX;
-    positions[trailIndex * 3 + 1] = marsY;
-    positions[trailIndex * 3 + 2] = 0;
+    // Update Mars trail
+    const marsPositions = marsTrailLine.geometry.attributes.position.array;
+    marsPositions[marsTrailIndex * 3] = marsX;
+    marsPositions[marsTrailIndex * 3 + 1] = marsY;
+    marsPositions[marsTrailIndex * 3 + 2] = 0;
+    marsTrailIndex = (marsTrailIndex + 1) % MAX_TRAIL_POINTS;
+    marsTrailLine.geometry.attributes.position.needsUpdate = true;
     
-    trailIndex = (trailIndex + 1) % MAX_TRAIL_POINTS;
-    trailLine.geometry.attributes.position.needsUpdate = true;
+    // Update Earth trail
+    const earthPositions = earthTrailLine.geometry.attributes.position.array;
+    earthPositions[earthTrailIndex * 3] = earthX;
+    earthPositions[earthTrailIndex * 3 + 1] = earthY;
+    earthPositions[earthTrailIndex * 3 + 2] = 0;
+    earthTrailIndex = (earthTrailIndex + 1) % MAX_TRAIL_POINTS;
+    earthTrailLine.geometry.attributes.position.needsUpdate = true;
   }
 
   // Update sun light position
   sunLight.position.copy(sunMesh.position);
 
-  // Add rotation to both bodies for visual appeal
+  // Add rotation to all bodies for visual appeal
   sunMesh.rotation.y += deltaTime * 0.5;
+  earthMesh.rotation.y += deltaTime * 1.5;
   marsMesh.rotation.y += deltaTime * 2.0;
 
   // Update camera controls
