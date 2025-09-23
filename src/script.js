@@ -82,7 +82,7 @@ const mars = createCelestialBody({
 
 // Set up the simulation with the celestial bodies
 const simulation = new PhysicsSimulation([sun, earth, mars]);
-simulation.dt = 86400 * 10; // 10 days per step for faster orbit
+simulation.dt = 86400 * 1; // 1 day per step for more realistic orbital speed
 
 // Scale factor for converting physics units to Three.js units
 const SCALE_FACTOR = 1 / 1e11; // Convert meters to scene units
@@ -193,8 +193,8 @@ const tick = () => {
   const deltaTime = currentTime - lastTime;
   lastTime = currentTime;
 
-  // Update physics simulation every 0.5 seconds for smooth continuous animation
-  if (currentTime - lastPhysicsUpdate >= 0.5) {
+  // Update physics simulation every 0.1 seconds for realistic orbital speed
+  if (currentTime - lastPhysicsUpdate >= 0.1) {
     simulation.step();
     simulationTime += simulation.dt;
     lastPhysicsUpdate = currentTime;
